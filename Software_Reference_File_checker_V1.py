@@ -299,6 +299,9 @@ class OVN_Execution(tk.Tk):
 
         best_match = None
         best_suffix_value = -1
+        # fallback when there is a name match but no numeric suffix; pick latest modified
+        fallback_match = None
+        fallback_mtime = -1
 
         # Check for exact match first
         for entry in os.listdir(bmw_doc_dir):
@@ -350,6 +353,16 @@ class OVN_Execution(tk.Tk):
                             best_suffix_value = suffix_value
                             best_match = entry_path
                             print(f"[DEBUG] create_BMW_doc_path: Updated best match -> {best_match}, best_suffix_value={best_suffix_value}")
+                    else:
+                        # No numeric suffix; consider as fallback by latest modified time
+                        try:
+                            mtime = os.path.getmtime(entry_path)
+                            if mtime > fallback_mtime:
+                                fallback_mtime = mtime
+                                fallback_match = entry_path
+                                print(f"[DEBUG] create_BMW_doc_path: Updated fallback match -> {fallback_match}")
+                        except Exception:
+                            pass
 
             # If match found after reduction, stop further reduction
             if best_match:
@@ -359,12 +372,23 @@ class OVN_Execution(tk.Tk):
                 )
                 return best_match
 
+            # If only fallback found, use it
+            if fallback_match:
+                print(f"[DEBUG] create_BMW_doc_path: Using fallback match after reduction -> {fallback_match}")
+                self.display_warning(
+                    f"Reference BMW_Doc path used is \n{fallback_match}"
+                )
+                return fallback_match
+
             # Shorten `lowered_subsub` by removing the last character
             lowered_subsub = lowered_subsub[:-1]
             print(f"[DEBUG] create_BMW_doc_path: Shortened subsub to {lowered_subsub}")
 
         # Final attempt with exactly 4 characters
         if len(lowered_subsub) == 4:
+            # reset per-phase fallbacks
+            phase_fallback_match = None
+            phase_fallback_mtime = -1
             for entry in os.listdir(bmw_doc_dir):
                 entry_path = os.path.join(bmw_doc_dir, entry)
                 if not os.path.isdir(entry_path):
@@ -380,6 +404,16 @@ class OVN_Execution(tk.Tk):
                             best_suffix_value = suffix_value
                             best_match = entry_path
                             print(f"[DEBUG] create_BMW_doc_path: Updated best match -> {best_match}, best_suffix_value={best_suffix_value}")
+                    else:
+                        # No numeric suffix; collect fallback by latest modified
+                        try:
+                            mtime = os.path.getmtime(entry_path)
+                            if mtime > phase_fallback_mtime:
+                                phase_fallback_mtime = mtime
+                                phase_fallback_match = entry_path
+                                print(f"[DEBUG] create_BMW_doc_path: Updated 4-char fallback -> {phase_fallback_match}")
+                        except Exception:
+                            pass
 
         if best_match:
             print(f"[DEBUG] create_BMW_doc_path: Best match -> {best_match}")
@@ -388,6 +422,14 @@ class OVN_Execution(tk.Tk):
                     f"Reference BMW_Doc path used is \n{best_match}"
                 )
             return best_match
+
+        # Use 4-char phase fallback if available
+        if len(lowered_subsub) == 4 and phase_fallback_match:
+            print(f"[DEBUG] create_BMW_doc_path: Using 4-char fallback -> {phase_fallback_match}")
+            self.display_warning(
+                f"Reference BMW_Doc path used is \n{phase_fallback_match}"
+            )
+            return phase_fallback_match
 
         print("[DEBUG] create_BMW_doc_path: No matching BMW_Doc subfolder found")
         self.display_warning("No matching BMW_Doc subfolder found.")

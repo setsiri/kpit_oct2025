@@ -18,6 +18,7 @@ import win32gui
 import win32con
 import customtkinter as ctk
 import html
+import sys
 
 first_result = None
 SWFK = None
@@ -58,7 +59,7 @@ def load_1st_result(path):
     if not os.path.exists(first_folder):
         print(f"[DEBUG] load_1st_result: first_folder does not exist: {first_folder}")
         messagebox.showerror("Path not found", "Path of log folder is not found. Please select log folder manually.")
-        return
+        sys.exit(1)
     else:
         for path in os.listdir(first_folder):
             print(f"[DEBUG] load_1st_result: file in folder: {path}")
@@ -66,6 +67,10 @@ def load_1st_result(path):
                 first_result = path
                 print(f"[DEBUG] load_1st_result: Found first_result HTML file: {first_result}")
                 break
+    # If no test result html was found, show popup and exit
+    if not first_result:
+        messagebox.showerror("Test Result Not Found", "ไม่พบไฟล์ Test Result (.html) ในโฟลเดอร์ที่เลือก ระบบจะปิดโปรแกรมหลังจากกด OK")
+        sys.exit(1)
     if first_result:
         first_result_path = os.path.join(first_folder, first_result)
         print(f"[DEBUG] load_1st_result: first_result_path={first_result_path}")
