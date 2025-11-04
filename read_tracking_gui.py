@@ -322,7 +322,7 @@ def show_sheets_and_analysis(path: str, info: dict):
     """
     textbox.configure(state="normal")
     textbox.delete("0.0", "end")
-    textbox.insert("end", "กำลังประมวลผลแบบแบ็คกราวด์...\n")
+    textbox.insert("end", "Processing in background...\n")
     textbox.configure(state="disabled")
 
 
@@ -338,10 +338,10 @@ def start_analysis(path: str, info: dict):
     # เตรียม UI
     textbox.configure(state="normal")
     textbox.delete("0.0", "end")
-    textbox.insert("end", "กำลังประมวลผล...\n")
+    textbox.insert("end", "Processing...\n")
     textbox.configure(state="disabled")
 
-    status_label.configure(text="กำลังเปิดไฟล์และเตรียมข้อมูล...")
+    status_label.configure(text="Opening File...")
     progress_bar.configure(mode="indeterminate")
     progress_bar.start()
     browse_btn.configure(state="disabled")
@@ -464,18 +464,18 @@ def poll_results():
                     progress_bar.stop()
                     progress_bar.configure(mode="determinate")
                     progress_bar.set(0)
-                    status_label.configure(text=f"พบ {total} ชีท กำลังวิเคราะห์...")
+                    status_label.configure(text=f"found {total} Analysis...")
                     poll_results.total = total
                     poll_results.processed = 0
                 else:
-                    status_label.configure(text="ไม่พบชีทในไฟล์")
+                    status_label.configure(text="Not Found any Analysis sheets.")
             elif item_type == "progress":
                 current = payload.get("current", 0)
                 total = payload.get("total", 0)
                 if total > 0:
                     progress = current / total
                     progress_bar.set(progress)
-                    status_label.configure(text=f"วิเคราะห์แล้ว {current}/{total} ชีท")
+                    status_label.configure(text=f"Analysis done {current}/{total} Sheets...")
             elif item_type == "results":
                 # แสดงผลลัพธ์
                 sheet_results = payload
@@ -512,7 +512,7 @@ def poll_results():
             elif item_type == "error":
                 messagebox.showerror("Error", f"Failed to read workbook:\n{payload}")
             elif item_type == "done":
-                status_label.configure(text="เสร็จสิ้น")
+                status_label.configure(text="Analysis completed.")
                 progress_bar.stop()
                 browse_btn.configure(state="normal")
                 clear_btn.configure(state="normal")
@@ -569,7 +569,7 @@ def main():
     progress_bar.pack(fill="x", padx=8, pady=(0, 4))
     progress_bar.set(0)
 
-    status_label = ctk.CTkLabel(frame, text="พร้อมทำงาน", anchor="w")
+    status_label = ctk.CTkLabel(frame, text="Ready to process", anchor="w")
     status_label.pack(fill="x", padx=8, pady=(0, 8))
 
     # Textbox to show sheet names

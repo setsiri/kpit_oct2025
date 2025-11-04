@@ -61,3 +61,61 @@ HW_Delta3.0 ดูจาก ผลของ sheet เบอร์ 20.
 
 
 โดยถ้าเป็นกรณีที่พิจารณาจากหลายชีต ให้ เอา false เหนือ true ก็คือถ้าเจอว่าเป็น false ให้ return false ได้เลย
+
+
+เพิ่มส่วนของโปรแกรม
+สร้าง function validate_testlog
+จาก Base directory D:\SVN_ENG9\Execution\SP21P\SOP2607\2535.0\G70_LCI\HW_SOP2.0\Tracking\L2
+ให้หาไฟล์ชื่อ TestlogReader อ่านไฟล์ ใน column ตั้งแต่ B ถึง K โดยอ่านตั้งแต่ row 5 ลงไปจนกว่าจะเจอ blank และแสดงผลว่าพบเจอค่าใดบ้าง ในแต่ละ column คล้ายการ filter แสดงผลลัพท์ต่อจากเดิมในลักษณะดังตัวอย่าง
+
+
+Results: Each pages
+----------------------------------------------
+5. L1_FI -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+6. FuSa_Charger -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = False
+7. FuSa_NACS -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+8. FuSa_FTT -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+9. FuSa_14DCDC -> Yes_All_applicable_TC_Presented = True; No_Inapplicable_TC_Presented = True
+10. FuSa_14DCDC_EFAN -> Yes_All_applicable_TC_Presented = True; No_Inapplicable_TC_Presented = True
+11. FuSa_SEV -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+12. FuSa_FaultInjection -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+13. Function_Charger -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+14. Function_SCC -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+15. Function_14DCDC -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+16. LEV4ZEV -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+17. Thermal Management -> Yes_All_applicable_TC_Presented = True; No_Inapplicable_TC_Presented = False
+18. HW_SOP1.6_Delta_TCs -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+19. HW_SOP2.0_Delta_TCs -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+20. HW_SOP3.0_Delta_TCs -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+21. HW_SOP3.0_Delta_TCs_Pratik -> Yes_All_applicable_TC_Presented = True; No_Inapplicable_TC_Presented = True
+22. SW_Delta_TCs -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+----------------------------------------------
+Result: Test Level
+L1_FI -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+L2_FuSa -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = False
+L3_QM -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+HW_Delta1.6 -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+HW_Delta2.0 -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+HW_Delta3.0 -> Yes_All_applicable_TC_Presented = False; No_Inapplicable_TC_Presented = True
+------------------------------------------------
+Test_log Filter:
+SWFK
+- ค่าในcolumn B
+HWEL
+- ค่าในcolumn C
+PIC version
+- ค่าในcolumn D
+HW version
+- ค่าในcolumn E
+Setup
+- ค่าในcolumn F
+Configuration
+- ค่าในcolumn G
+CAN_Database
+- ค่าในcolumn H
+LIN_Database
+- ค่าในcolumn I
+PDX
+- ค่าในcolumn J
+Remark
+- ค่าในcolumn K
