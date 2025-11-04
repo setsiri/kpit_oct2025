@@ -7,6 +7,7 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
+from openpyxl.utils import get_column_letter
 
 
 def _norm_str(x):
@@ -27,6 +28,11 @@ def Check_Yes_All_applicable_TC_Presented_And_No_Inapplicable_TC_Presented(ws: W
     """
     คืนค่าเป็น tuple: (Yes_All_applicable_TC_Presented, No_Inapplicable_TC_Presented)
     หรือ return 0 ถ้า row1/row2 หา matching ไม่เจอ
+
+    ปรับตาม README:
+    - อ่านค่าที่ไม่ว่างทั้งหมดในแถว 1 เพื่อหา SP แบบยืดหยุ่น
+      กลุ่ม A = คอลัมน์ A..P, กลุ่ม Q = คอลัมน์ Q..X, กลุ่ม Y = คอลัมน์ Y.. ไปจนกว่าจะเจอช่องว่างแรก (สำหรับแถว 2)
+    - เมื่อทราบกลุ่มแล้ว ให้หา SOP ในแถว 2 ภายในช่วงของกลุ่มนั้น
     """
     sheet_name = ws.title
     SP_norm = _norm_str(SP)
@@ -36,41 +42,79 @@ def Check_Yes_All_applicable_TC_Presented_And_No_Inapplicable_TC_Presented(ws: W
     print(f"[DEBUG] SP from path = {SP_norm}")
     print(f"[DEBUG] SOP from path = {SOP_norm}")
 
-    # Row1: A1, J1, V1
-    a1 = _cell_value(ws, 'A1')
-    j1 = _cell_value(ws, 'J1')
-    v1 = _cell_value(ws, 'V1')
-    print(f"[DEBUG] Row1 values -> A1: {a1}, J1: {j1}, V1: {v1}")
-
-    chosen_group = None  # 'A', 'J', 'V'
-    if SP_norm and a1 and a1 == SP_norm:
-        chosen_group = 'A'
-    elif SP_norm and j1 and j1 == SOP_norm:  # ถ้าอยากเทียบ SP ใช้ j1 == SP_norm
-        chosen_group = 'J'
-    elif SP_norm and v1 and v1 == SP_norm:
-        chosen_group = 'V'
+    # อ่านทั้งแถว 1 เพื่อหาค่าที่ไม่ว่าง พร้อมพิมพ์ debug
+    non_blank_row1 = []  # list[(col_idx, col_letter, value)]
+    max_c = ws.max_column or 1
+    for ci in range(1, max_c + 1):
+        v = _norm_str(ws.cell(row=1, column=ci).value)
+        if v is not None and v != "":
+            col_letter = get_column_letter(ci)
+            non_blank_row1.append((ci, col_letter, v))
+    if non_blank_row1:
+        dbg = ", ".join([f"{c}{1}: {v}" for (_, c, v) in non_blank_row1])
+        print(f"[DEBUG] Row1 non-blanks -> {dbg}")
     else:
-        print("[DEBUG] row1 can't find matching")
+        print("[DEBUG] Row1 has no non-blank cells")
         return 0
 
-    # Row2 mapping
-    if chosen_group == 'A':
-        sop_map = [('D2', 'D'), ('E2', 'E'), ('F2', 'F'), ('G2', 'G')]
-    elif chosen_group == 'J':
-        sop_map = [('R2', 'R'), ('S2', 'S'), ('T2', 'T'), ('U2', 'U')]
-    else:  # 'V'
-        sop_map = [('V2', 'V')]
+    # เลือกกลุ่มจากตำแหน่ง cell ที่ค่าตรงกับ SP
+    chosen_group = None  # 'A' | 'Q' | 'Y'
+    chosen_group_example_cell = None
+    if SP_norm:
+        for ci, col_letter, v in non_blank_row1:
+            if v == SP_norm:
+                if 1 <= ci <= 16:  # A..P
+                    chosen_group = 'A'
+                elif 17 <= ci <= 24:  # Q..X
+                    chosen_group = 'Q'
+                else:  # Y..
+                    chosen_group = 'Y'
+                chosen_group_example_cell = f"{col_letter}1"
+                break
 
-    chosen_col = None
-    for coord, col in sop_map:
-        val = _cell_value(ws, coord)
-        print(f"[DEBUG] Checking {coord} = {val}")
-        if SOP_norm and val and val == SOP_norm:
-            chosen_col = col
-            break
+    if chosen_group is None:
+        print("[DEBUG] row1 can't find matching SP in any cell")
+        return 0
+
+    print(f"[DEBUG] Chosen group = {chosen_group} (matched at {chosen_group_example_cell})")
+
+    # ค้นหา SOP ในแถว 2 ตามช่วงของกลุ่ม
+    chosen_col = None  # column letter
+    if chosen_group == 'A':
+        start_ci, end_ci = 1, 16  # A..P
+        for ci in range(start_ci, min(end_ci, max_c) + 1):
+            val = _norm_str(ws.cell(row=2, column=ci).value)
+            col_letter = get_column_letter(ci)
+            print(f"[DEBUG] Checking {col_letter}2 = {val}")
+            if SOP_norm and val and val == SOP_norm:
+                chosen_col = col_letter
+                break
+    elif chosen_group == 'Q':
+        start_ci, end_ci = 17, 24  # Q..X
+        for ci in range(start_ci, min(end_ci, max_c) + 1):
+            val = _norm_str(ws.cell(row=2, column=ci).value)
+            col_letter = get_column_letter(ci)
+            print(f"[DEBUG] Checking {col_letter}2 = {val}")
+            if SOP_norm and val and val == SOP_norm:
+                chosen_col = col_letter
+                break
+    else:  # 'Y'
+        start_ci = 25  # Y
+        ci = start_ci
+        while ci <= max_c:
+            val = _norm_str(ws.cell(row=2, column=ci).value)
+            col_letter = get_column_letter(ci)
+            print(f"[DEBUG] Checking {col_letter}2 = {val}")
+            if val is None or val == "":
+                # เจอช่องว่างครั้งแรก ให้หยุดช่วงของกลุ่ม Y
+                break
+            if SOP_norm and val == SOP_norm:
+                chosen_col = col_letter
+                break
+            ci += 1
 
     if chosen_col is None:
-        print("[DEBUG] row2 can't find matching")
+        print("[DEBUG] row2 can't find matching SOP in the selected group range")
         return 0
 
     print(f"[DEBUG] Matched SOP at column {chosen_col}")
@@ -97,8 +141,8 @@ def Check_Yes_All_applicable_TC_Presented_And_No_Inapplicable_TC_Presented(ws: W
             if ag is not None and ag != "":
                 no_nonblank_ag += 1
 
-    yes_all = "Not all TC presented" if yes_rows and (yes_blank_ag > 0) else "All TC presented"
-    no_inapp = "Inapplicable TC Presented" if no_rows and (no_nonblank_ag > 0) else "No Inapplicable TC Presented"
+    yes_all = "False" if yes_rows and (yes_blank_ag > 0) else "True"
+    no_inapp = "False" if no_rows and (no_nonblank_ag > 0) else "True"
 
     print(f"[DEBUG] Total YES rows = {len(yes_rows)}, YES rows with AG blank = {yes_blank_ag}")
     print(f"[DEBUG] Total NO rows  = {len(no_rows)}, NO rows with AG non-blank = {no_nonblank_ag}")
