@@ -329,7 +329,7 @@ def show_sheets_and_analysis(path: str, info: dict):
 def start_analysis(path: str, info: dict):
     """
     เริ่มงานวิเคราะห์ไฟล์แบบไม่บล็อก GUI โดยใช้ Thread + Queue
-    อัปเดตผลทีละชีทผ่านตัวจับเวลา .after()
+    ประมวลผลเฉพาะ sheet 5-22 และแสดงผลในรูปแบบ Results: Each pages และ Result: Test Level
     """
     global result_queue, analysis_thread, cancel_flag
     cancel_flag = False
@@ -338,8 +338,7 @@ def start_analysis(path: str, info: dict):
     # เตรียม UI
     textbox.configure(state="normal")
     textbox.delete("0.0", "end")
-    textbox.insert("end", "Sheets & Results:\n")
-    textbox.insert("end", "----------------------------------------------\n")
+    textbox.insert("end", "กำลังประมวลผล...\n")
     textbox.configure(state="disabled")
 
     status_label.configure(text="กำลังเปิดไฟล์และเตรียมข้อมูล...")
@@ -352,22 +351,36 @@ def start_analysis(path: str, info: dict):
         try:
             wb = load_workbook(filename=path, read_only=True, data_only=True)
             sheets = wb.sheetnames or []
-            result_queue.put(("__meta__", {"total": len(sheets)}))
-            for i, s in enumerate(sheets, start=1):
+            
+            # ประมวลผลเฉพาะ sheet 5-22 (index 4-21)
+            target_sheets = sheets[4:22] if len(sheets) >= 22 else sheets[4:]
+            total = len(target_sheets)
+            result_queue.put(("__meta__", {"total": total}))
+            
+            # เก็บผลลัพธ์ของแต่ละ sheet
+            sheet_results = {}  # {sheet_index: (sheet_name, yes_all, no_inapp)}
+            
+            for idx, s in enumerate(target_sheets, start=5):
                 try:
                     ws = wb[s]
                     res = Check_Yes_All_applicable_TC_Presented_And_No_Inapplicable_TC_Presented(ws, info.get('SP'), info.get('SOP'))
                     if res == 0:
-                        msg = f"{i}. {s} -> row1/row2 can't find matching -> 0\n"
+                        sheet_results[idx] = (s, None, None)
                     else:
                         yes_all, no_inapp = res
-                        msg = (
-                            f"{i}. {s} -> Yes_All_applicable_TC_Presented = {yes_all}; "
-                            f"No_Inapplicable_TC_Presented = {no_inapp}\n"
-                        )
-                    result_queue.put(("line", msg))
+                        sheet_results[idx] = (s, yes_all, no_inapp)
+                    
+                    # อัปเดตความคืบหน้า
+                    current = idx - 4  # 5->1, 6->2, ..., 22->18
+                    result_queue.put(("progress", {"current": current, "total": total}))
                 except Exception as se:
-                    result_queue.put(("line", f"{i}. {s} -> ERROR: {se}\n"))
+                    sheet_results[idx] = (s, None, None)
+                    current = idx - 4
+                    result_queue.put(("progress", {"current": current, "total": total}))
+            
+            # ส่งผลลัพธ์ทั้งหมดไป
+            result_queue.put(("results", sheet_results))
+            
         except Exception as e:
             result_queue.put(("error", str(e)))
         finally:
@@ -376,6 +389,66 @@ def start_analysis(path: str, info: dict):
     analysis_thread = threading.Thread(target=worker, daemon=True)
     analysis_thread.start()
     root.after(50, poll_results)
+
+
+def calculate_test_level_results(sheet_results):
+    """
+    คำนวณผล Test Level จาก sheet results
+    Returns: dict {test_level: (yes_all, no_inapp)}
+    """
+    test_level_results = {}
+    
+    # L1_FI: sheet 5
+    if 5 in sheet_results:
+        name, yes_all, no_inapp = sheet_results[5]
+        if yes_all is not None and no_inapp is not None:
+            test_level_results["L1_FI"] = (yes_all, no_inapp)
+    
+    # L2_FuSa: sheet 6-11
+    l2_results = []
+    for idx in range(6, 12):
+        if idx in sheet_results:
+            name, yes_all, no_inapp = sheet_results[idx]
+            if yes_all is not None and no_inapp is not None:
+                l2_results.append((yes_all, no_inapp))
+    if l2_results:
+        yes_all_all = all(y == "True" for y, _ in l2_results)
+        no_inapp_all = all(n == "True" for _, n in l2_results)
+        test_level_results["L2_FuSa"] = ("True" if yes_all_all else "False", 
+                                          "True" if no_inapp_all else "False")
+    
+    # L3_QM: sheet 13-16
+    l3_results = []
+    for idx in range(13, 17):
+        if idx in sheet_results:
+            name, yes_all, no_inapp = sheet_results[idx]
+            if yes_all is not None and no_inapp is not None:
+                l3_results.append((yes_all, no_inapp))
+    if l3_results:
+        yes_all_all = all(y == "True" for y, _ in l3_results)
+        no_inapp_all = all(n == "True" for _, n in l3_results)
+        test_level_results["L3_QM"] = ("True" if yes_all_all else "False", 
+                                        "True" if no_inapp_all else "False")
+    
+    # HW_Delta1.6: sheet 18
+    if 18 in sheet_results:
+        name, yes_all, no_inapp = sheet_results[18]
+        if yes_all is not None and no_inapp is not None:
+            test_level_results["HW_Delta1.6"] = (yes_all, no_inapp)
+    
+    # HW_Delta2.0: sheet 19
+    if 19 in sheet_results:
+        name, yes_all, no_inapp = sheet_results[19]
+        if yes_all is not None and no_inapp is not None:
+            test_level_results["HW_Delta2.0"] = (yes_all, no_inapp)
+    
+    # HW_Delta3.0: sheet 20
+    if 20 in sheet_results:
+        name, yes_all, no_inapp = sheet_results[20]
+        if yes_all is not None and no_inapp is not None:
+            test_level_results["HW_Delta3.0"] = (yes_all, no_inapp)
+    
+    return test_level_results
 
 
 def poll_results():
@@ -392,27 +465,53 @@ def poll_results():
                     progress_bar.configure(mode="determinate")
                     progress_bar.set(0)
                     status_label.configure(text=f"พบ {total} ชีท กำลังวิเคราะห์...")
-                    poll_results.processed = 0
                     poll_results.total = total
+                    poll_results.processed = 0
                 else:
                     status_label.configure(text="ไม่พบชีทในไฟล์")
-            elif item_type == "line":
+            elif item_type == "progress":
+                current = payload.get("current", 0)
+                total = payload.get("total", 0)
+                if total > 0:
+                    progress = current / total
+                    progress_bar.set(progress)
+                    status_label.configure(text=f"วิเคราะห์แล้ว {current}/{total} ชีท")
+            elif item_type == "results":
+                # แสดงผลลัพธ์
+                sheet_results = payload
                 textbox.configure(state="normal")
-                textbox.insert("end", payload)
+                textbox.delete("0.0", "end")
+                
+                # ส่วนที่ 1: Results: Each pages
+                textbox.insert("end", "Results: Each pages\n")
+                textbox.insert("end", "----------------------------------------------\n")
+                for idx in sorted(sheet_results.keys()):
+                    name, yes_all, no_inapp = sheet_results[idx]
+                    if yes_all is None or no_inapp is None:
+                        textbox.insert("end", f"{idx}. {name} -> row1/row2 can't find matching -> 0\n")
+                    else:
+                        textbox.insert("end", 
+                            f"{idx}. {name} -> Yes_All_applicable_TC_Presented = {yes_all}; "
+                            f"No_Inapplicable_TC_Presented = {no_inapp}\n")
+                
+                textbox.insert("end", "----------------------------------------------\n")
+                
+                # ส่วนที่ 2: Result: Test Level
+                test_level_results = calculate_test_level_results(sheet_results)
+                textbox.insert("end", "Result: Test Level\n")
+                for test_level in ["L1_FI", "L2_FuSa", "L3_QM", "HW_Delta1.6", "HW_Delta2.0", "HW_Delta3.0"]:
+                    if test_level in test_level_results:
+                        yes_all, no_inapp = test_level_results[test_level]
+                        textbox.insert("end", 
+                            f"{test_level} -> Yes_All_applicable_TC_Presented = {yes_all}; "
+                            f"No_Inapplicable_TC_Presented = {no_inapp}\n")
+                
                 textbox.see("end")
                 textbox.configure(state="disabled")
-                # อัปเดตความคืบหน้า
-                if hasattr(poll_results, "total") and poll_results.total:
-                    poll_results.processed = getattr(poll_results, "processed", 0) + 1
-                    progress = poll_results.processed / poll_results.total
-                    progress_bar.set(progress)
-                    status_label.configure(text=f"วิเคราะห์แล้ว {poll_results.processed}/{poll_results.total} ชีท")
+                
             elif item_type == "error":
                 messagebox.showerror("Error", f"Failed to read workbook:\n{payload}")
             elif item_type == "done":
-                textbox.configure(state="normal")
-                textbox.insert("end", "----------------------------------------------\n")
-                textbox.configure(state="disabled")
                 status_label.configure(text="เสร็จสิ้น")
                 progress_bar.stop()
                 browse_btn.configure(state="normal")
