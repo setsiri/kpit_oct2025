@@ -66,7 +66,7 @@ HW_Delta3.0 ดูจาก ผลของ sheet เบอร์ 20.
 เพิ่มส่วนของโปรแกรม
 สร้าง function validate_testlog
 จาก Base directory D:\SVN_ENG9\Execution\SP21P\SOP2607\2535.0\G70_LCI\HW_SOP2.0\Tracking\L2
-ให้หาไฟล์ชื่อ TestlogReader อ่านไฟล์ ใน column ตั้งแต่ B ถึง K โดยอ่านตั้งแต่ row 5 ลงไปจนกว่าจะเจอ blank และแสดงผลว่าพบเจอค่าใดบ้าง ในแต่ละ column คล้ายการ filter แสดงผลลัพท์ต่อจากเดิมในลักษณะดังตัวอย่าง
+ให้หาไฟล์ชื่อ TestlogReader อ่านไฟล์ ใน column ตั้งแต่ B ถึง K โดยอ่านตั้งแต่ row 5 ลงไปจนกว่าจะเจอ blank และแสดงผลว่าพบเจอค่าใดบ้างไม่เอาค่าซ้ำมาแสดงแสดงค่าละครั้ง ในแต่ละ column คล้ายการ filter แสดงผลลัพท์ต่อจากเดิมในลักษณะดังตัวอย่าง
 
 
 Results: Each pages

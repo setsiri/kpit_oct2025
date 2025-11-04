@@ -381,6 +381,28 @@ def start_analysis(path: str, info: dict):
             # ส่งผลลัพธ์ทั้งหมดไป
             result_queue.put(("results", sheet_results))
             
+            # เรียกใช้ validate_testlog
+            # สร้าง base_dir สำหรับ TestlogReader: .../Tracking/{TEST_LEVEL}
+            base_dir_for_testlog = None
+            if info.get('base_dir'):
+                parts = info['base_dir'].split(os.sep)
+                parts_lower = [p.lower() for p in parts]
+                try:
+                    tracking_idx = parts_lower.index('tracking')
+                    if tracking_idx + 1 < len(parts):
+                        # สร้าง path ไปยัง Tracking/{TEST_LEVEL}
+                        test_level = parts[tracking_idx + 1]
+                        base_dir_for_testlog = os.sep.join(parts[:tracking_idx + 2])
+                    else:
+                        # ถ้ายังไม่มี TEST_LEVEL ให้ใช้ directory ของ Tracking
+                        base_dir_for_testlog = os.sep.join(parts[:tracking_idx + 1])
+                except ValueError:
+                    pass
+            
+            if base_dir_for_testlog:
+                testlog_result = validate_testlog(base_dir_for_testlog)
+                result_queue.put(("testlog", testlog_result))
+            
         except Exception as e:
             result_queue.put(("error", str(e)))
         finally:
@@ -451,6 +473,93 @@ def calculate_test_level_results(sheet_results):
     return test_level_results
 
 
+def validate_testlog(base_dir: str):
+    """
+    หาไฟล์ชื่อ TestlogReader ใน base_dir
+    อ่านไฟล์ใน column B-K ตั้งแต่ row 5 ลงไปจนกว่าจะเจอ blank
+    แสดงค่าที่ไม่ซ้ำในแต่ละ column
+    
+    Returns: dict {column_name: [unique_values]} หรือ None ถ้าไม่พบไฟล์
+    """
+    if not base_dir or not os.path.isdir(base_dir):
+        print(f"[validate_testlog] Base directory not found: {base_dir}")
+        return None
+    
+    # หาไฟล์ TestlogReader (รองรับทั้ง .xlsx, .xlsm, .xltx, .xltm)
+    testlog_file = None
+    for ext in [".xlsx", ".xlsm", ".xltx", ".xltm"]:
+        candidate = os.path.join(base_dir, f"TestlogReader{ext}")
+        if os.path.isfile(candidate):
+            testlog_file = candidate
+            break
+    
+    if not testlog_file:
+        print(f"[validate_testlog] TestlogReader file not found in: {base_dir}")
+        return None
+    
+    print(f"[validate_testlog] Found TestlogReader: {testlog_file}")
+    
+    try:
+        wb = load_workbook(filename=testlog_file, read_only=True, data_only=True)
+        ws = wb.active  # ใช้ sheet แรก
+        
+        # Column mapping: B=2, C=3, ..., K=11
+        column_mapping = {
+            'B': 'SWFK',
+            'C': 'HWEL',
+            'D': 'PIC version',
+            'E': 'HW version',
+            'F': 'Setup',
+            'G': 'Configuration',
+            'H': 'CAN_Database',
+            'I': 'LIN_Database',
+            'J': 'PDX',
+            'K': 'Remark'
+        }
+        
+        # เก็บค่าที่ไม่ซ้ำสำหรับแต่ละ column
+        column_values = {col: set() for col in column_mapping.keys()}
+        
+        # อ่านตั้งแต่ row 5 ลงไปจนเจอ blank
+        max_r = ws.max_row or 5
+        start_row = 5
+        
+        for row in range(start_row, max_r + 1):
+            # ตรวจสอบว่ามีค่าในแถวนี้หรือไม่ (เช็ค column B เป็นหลัก)
+            b_val = _cell_value(ws, f"B{row}")
+            if b_val is None or b_val == "":
+                # ถ้า column B ว่าง ให้หยุด (อาจจะเจอ blank แถวแล้ว)
+                # แต่ยังต้องเช็ค column อื่นๆ ด้วยในแถวเดียวกัน
+                all_blank = True
+                for col in column_mapping.keys():
+                    val = _cell_value(ws, f"{col}{row}")
+                    if val is not None and val != "":
+                        all_blank = False
+                        column_values[col].add(val)
+                if all_blank:
+                    # ถ้าทุก column ว่าง ให้หยุดการอ่าน
+                    break
+            else:
+                # ถ้า column B มีค่า ให้อ่านทุก column
+                for col in column_mapping.keys():
+                    val = _cell_value(ws, f"{col}{row}")
+                    if val is not None and val != "":
+                        column_values[col].add(val)
+        
+        # แปลง set เป็น sorted list เพื่อให้ผลลัพธ์สม่ำเสมอ
+        result = {}
+        for col, label in column_mapping.items():
+            unique_vals = sorted(list(column_values[col]), key=lambda x: str(x).lower())
+            result[label] = unique_vals
+        
+        wb.close()
+        return result
+        
+    except Exception as e:
+        print(f"[validate_testlog] Error reading file: {e}")
+        return None
+
+
 def poll_results():
     """
     ดึงผลจาก Queue และอัปเดต UI เป็นช่วงๆ เพื่อให้ GUI ลื่นไหล
@@ -508,6 +617,39 @@ def poll_results():
                 
                 textbox.see("end")
                 textbox.configure(state="disabled")
+                
+            elif item_type == "testlog":
+                # แสดงผล Test_log Filter
+                testlog_result = payload
+                if testlog_result:
+                    textbox.configure(state="normal")
+                    
+                    # หา position เพื่อ insert ต่อจาก Result: Test Level
+                    textbox.insert("end", "------------------------------------------------\n")
+                    textbox.insert("end", "Test_log Filter:\n")
+                    
+                    # Mapping ตาม requirement
+                    column_order = [
+                        'SWFK',
+                        'HWEL',
+                        'PIC version',
+                        'HW version',
+                        'Setup',
+                        'Configuration',
+                        'CAN_Database',
+                        'LIN_Database',
+                        'PDX',
+                        'Remark'
+                    ]
+                    
+                    for label in column_order:
+                        if label in testlog_result and testlog_result[label]:
+                            textbox.insert("end", f"{label}\n")
+                            for val in testlog_result[label]:
+                                textbox.insert("end", f"- {val}\n")
+                    
+                    textbox.see("end")
+                    textbox.configure(state="disabled")
                 
             elif item_type == "error":
                 messagebox.showerror("Error", f"Failed to read workbook:\n{payload}")
